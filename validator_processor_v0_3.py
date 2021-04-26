@@ -999,7 +999,7 @@ starts_at = 0
 
 src_root = r"C:\collections\xfmt-387"
 dst_root = r"C:\collections\ready_to_upload"
-set_id = "x_fmt_387_5"
+set_id = "x_fmt_387_4"
 
 
 files = make_list_of_files_from_set_folder()
