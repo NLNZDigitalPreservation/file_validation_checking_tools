@@ -10,12 +10,20 @@ import simplejson
 import copy
 import subprocess
 
-
 verbose = True
 
 class Summary_Text(object):
 	def __init__(self):
 		self.textlines = []
+		self.verbose = False
+
+	def add_line(self, text):
+		if type(text) != str:
+			print ("Input not str:", text)
+			quit()
+		self.textlines.append(text)
+		if self.verbose:
+			print (text)
 
 summary = Summary_Text()
 
@@ -35,6 +43,7 @@ class Image_Data_Container(object):
 		self.format = None
 		self.filename = None
 		self.file_identifer = None
+		self.htmldump_outfile = None
 
 	def make_package(self):
 		parts = self.original_filepath.split(os.sep)
@@ -154,30 +163,21 @@ def exiftool_check(verbose=verbose):
 				if k not in used_keys:
 					used_keys.append(k)
 				if k not in b.exiftool_md_cleaned:
-					# b.exiftool_md_cleaned[k] = None
-					line = f"Exiftool check - {k} mismatch: \n\tA: {a.exiftool_md_cleaned[k]} \n\tB: Not transfered"
-					print (line)
-					summary.textlines.append(line)
+					summary.add_line(f"Exiftool check - {k} mismatch: \n\tA: {a.exiftool_md_cleaned[k]} \n\tB: Not transfered")
 					master.deltas.append(["Exiftool check", k, a.exiftool_md_cleaned[k], None])
 				elif a.exiftool_md_cleaned[k] != b.exiftool_md_cleaned[k]:
-					line = f"Exiftool check - {k} mismatch: \n\tA: {a.exiftool_md_cleaned[k]} \n\tB: {b.exiftool_md_cleaned[k]}"
-					print (line)
-					summary.textlines.append(line)
+					summary.add_line( f"Exiftool check - {k} mismatch: \n\tA: {a.exiftool_md_cleaned[k]} \n\tB: {b.exiftool_md_cleaned[k]}")
 					master.deltas.append(["Exiftool check", k, a.exiftool_md_cleaned[k], b.exiftool_md_cleaned[k]])
 
 
 			for k, v in b.exiftool_md_cleaned.items():
 				if k not in used_keys:
 					if k not in a.exiftool_md_cleaned:
-						line = f"Exiftool check - {k} mismatch: \n\tA: ITEM Probably Moved  \n\tB: {b.exiftool_md_cleaned[k]}"
-						print (line)
-						summary.textlines.append(line)
+						summary.add_line(f"Exiftool check - {k} mismatch: \n\tA: Data not in original  \n\tB: {b.exiftool_md_cleaned[k]}")
 						master.deltas.append(["Exiftool check", k, None, b.exiftool_md_cleaned[k]])
 
 					elif a.exiftool_md_cleaned[k] != b.exiftool_md_cleaned[k]:
-						line = f"Exiftool check - {k} mismatch: \n\tA: {a.exiftool_md_cleaned[k]} \n\tB: {b.exiftool_md_cleaned[k]}"
-						print (line)
-						summary.textlines.append(line)
+						summary.add_line(f"Exiftool check - {k} mismatch: \n\tA: {a.exiftool_md_cleaned[k]} \n\tB: {b.exiftool_md_cleaned[k]}")
 						master.deltas.append(["Exiftool check", k, a.exiftool_md_cleaned[k], b.exiftool_md_cleaned[k]])
 
 
@@ -190,6 +190,16 @@ def jhove_check():
 			return True
 		else:
 			return False
+
+def use_exiftool_to_make_htmldump():
+
+	a.htmldump_outfile = os.path.join(a.item_root, "ORIGINAL", "exif_htmldump.html")
+	b.htmldump_outfile = os.path.join(a.item_root, "NEW", "exif_htmldump.html")
+
+	cmd = f'''exiftool -htmldump "{a.working_file_path}" > "{a.htmldump_outfile}"'''
+	subprocess.call(cmd, shell=True)
+	cmd = f'''exiftool -htmldump "{b.working_file_path}" > "{b.htmldump_outfile}"'''
+	subprocess.call(cmd, shell=True)
 
 def use_exiftool_to_set_exif():
 	"""
@@ -253,8 +263,11 @@ def make_difference_images(im1, im2):
 	diff_folder = os.path.join(a.item_root, "difference_images")
 	if not os.path.exists(diff_folder):
 		os.makedirs(diff_folder)
+	try:
+		difference = ImageChops.difference(im1, im2)
+	except:
+		return None
 
-	difference = ImageChops.difference(im1, im2)
 	difference = ImageChops.invert(difference)
 
 	difference.save(os.path.join(diff_folder, "diff.png"))
@@ -291,8 +304,8 @@ def image_payload_identical(im1, im2, verbose=verbose, make_diff=True):
 	a.rms_value = rms_value
 	b.rms_value = rms_value
 	if verbose == True and rms_value!= 0.0:
-		print ("RMS:", rms_value)
-		summary.textlines.append(["RMS:", rms_value])
+		line  = f"RMS: {rms_value}"
+		summary.add_line(line)
 	if rms_value == 0:
 		a.rmse_same = b.rmse_same = True
 		return True
@@ -361,7 +374,6 @@ def tiff_md_check(im1, im2, verbose=verbose):
 	except KeyError:
 		im2_dpi = None
 
-
 	try:
 		im1_compression  = im1.info['compression'].strip()
 	except KeyError:
@@ -403,29 +415,25 @@ def tiff_md_check(im1, im2, verbose=verbose):
 		master.deltas.append(["PIL TIFF", "dpi", im1_dpi, im2_dpi])
 		if verbose:
 			line = f"PIL TIFF - dpi mismatch: \n\tA: {im1_dpi}\n\tB: {im2_dpi}"
-			print (line)
-			summary.textlines.append(line)
+			summary.add_line(line)
 
 	if not dpi:
 		master.deltas.append(["PIL TIFF", "icc_profile", im1_icc_profile, im2_icc_profile])
 		if verbose:
 			line = f"PIL TIFF - icc_profile mismatch: \n\tA: {im1_icc_profile}\n\tB: {im2_icc_profile}"
-			print (line)
-			summary.textlines.append(line)
+			summary.add_line(line)
 
 	if not compression:
 		master.deltas.append(["PIL TIFF", "compression", im1_compression, im2_compression])
 		if verbose:
 			line = f"PIL TIFF - compression mismatch: \n\tA: {im1_compression}\n\tB: {im2_compression}"
-			print (line)
-			summary.textlines.append(line)
+			summary.add_line(line)
 
 	if not compression:
 		master.deltas.append(["PIL TIFF", "resolution", im1_resolution, im2_resolution])
 		if verbose:
 			line = f"PIL TIFF - resolution mismatch: \n\tA: {im1_resolution}\n\tB: {im2_resolution}"
-			print (line)
-			summary.textlines.append(line)
+			summary.add_line(line)
 
 	a.format_md = {"format":"TIFF",
 					"dpi":im1_dpi,
@@ -507,36 +515,31 @@ def gif_md_check(im1, im2, verbose=verbose):
 		master.deltas.append(["PIL GIF", "version", im1_version, im2_version])
 		if verbose:
 			line = f"PIL GIF - version mismatch: \n\tA: {im1_version}\n\tB: {im2_version}"
-			print (line)
-			summary.textlines.append(line)
+			summary.add_line(line)
 
 	if im1_background != im2_background:
 		master.deltas.append(["PIL GIF", "background", im1_background, im2_background])
 		if verbose:
 			line = f"PIL GIF - background mismatch: \n\tA: {im1_background}\n\tB: {im2_background}"
-			print (line)
-			summary.textlines.append(line)
+			summary.add_line(line)
 
 	if im1_transparency != im2_transparency:
 		master.deltas.append(["PIL GIF ", "transparency", im1_transparency, im2_transparency])
 		if verbose:
 			line = f"PIL GIF - transparency mismatch: \n\tA: {im1_transparency}\n\tB: {im2_transparency}"
-			print (line)
-			summary.textlines.append(line)
+			summary.add_line(line)
 
 	if im1_duration != im2_duration:
 		master.deltas.append(["PIL GIF", "duration", im1_duration, im2_duration])
 		if verbose:
 			line = f"PIL GIF - duration mismatch: \n\tA: {im1_duration}\n\tB: {im2_duration}"
-			print (line)
-			summary.textlines.append(line)
+			summary.add_line(line)
 
 	if im1_extension != im2_extension:
 		master.deltas.append(["PIL GIF", "extension", im1_extension, im2_extension])
 		if verbose:
 			line = f"PIL GIF - extension mismatch: \n\tA: {im1_extension}\n\tB: {im2_extension}"
-			print (line)
-			summary.textlines.append(line)
+			summary.add_line(line)
 
 	version = im1_version == im2_version
 	background = im1_background == im2_background
@@ -651,50 +654,43 @@ def jpeg_md_check(im1, im2, verbose=verbose):
 		master.deltas.append(["PIL JPEG", "EXIF", "", ""])
 		if verbose:
 			line = f"PIL JPEG - EXIF mismatch"
-			print (line)
-			summary.textlines.append(line)
+			summary.add_line(line)
 
 	if im1_dpi != im2_dpi:
 		master.deltas.append(["PIL JPEG", "DPI", im1_dpi, im2_dpi])
 		if verbose:
 			line = f"PIL JPEG - dpi mismatch: \n\tA: {im1_dpi}\n\tB: {im2_dpi}"
-			print (line)
-			summary.textlines.append(line)
+			summary.add_line(line)
 
 	if im1_jfif != im2_jfif:
 		master.deltas.append(["PIL JPEG", "JFIF", im1_jfif, im2_jfif])
 		if verbose:
 			line = f"PIL JPEG - jfif mismatch: \n\tA: {im1_jfif}\n\tB: {im2_jfif}"
-			print (line)
-			summary.textlines.append(line)
+			summary.add_line(line)
 
 	if im1_jfif_version != im2_jfif_version:
 		master.deltas.append(["PIL JPEG", "JFIF version", im1_jfif_version, im2_jfif_version])
 		if verbose:
 			line = f"PIL JPEG - JFIF version mismatch: \n\tA: {im1_jfif_version}\n\tB: {im2_jfif_version}"
-			print (line)
-			summary.textlines.append(line)
+			summary.add_line(line)
 
 	if im1_jfif_unit != im2_jfif_unit:
 		master.deltas.append(["PIL JPEG", "JFIF unit", im1_jfif_unit, im2_jfif_unit])
 		if verbose:
 			line = f"PIL JPEG - JFIF unit mismatch: \n\tA: {im1_jfif_unit}\n\tB: {im2_jfif_unit}"
-			print (line)
-			summary.textlines.append(line)
+			summary.add_line(line)
 
 	if im1_jfif_density != im2_jfif_density:
 		master.deltas.append(["PIL JPEG", "JFIF density", im1_jfif_density, im2_jfif_density])
 		if verbose:
 			line = f"PIL JPEG - JFIF density mismatch: \n\tA: {im1_jfif_density}\n\tB: {im2_jfif_density}"
-			print (line)
-			summary.textlines.append(line)	
+			summary.add_line(line)	
 
 	if im1_icc_profile != im2_icc_profile:
 		master.deltas.append(["PIL JPEG", "icc profile", im1_icc_profile, im2_icc_profile])
 		if verbose:
 			line = f"PIL JPEG -  ICC profile mismatch: \n\tA: {im1_icc_profile}\n\tB: {im2_icc_profile}"
-			print (line)
-			summary.textlines.append(line)
+			summary.add_line(line)
 
 	exif_block = im1_exif == im2_exif
 	dpi = im1_dpi == im2_dpi
@@ -731,7 +727,12 @@ def md_check_basic(im1, im2, verbose=verbose):
 	Returns true if A == B for all fields, false is any not""" 
 	im1_size = im1.size	
 	im2_size = im2.size
-	im1_palette = im1.getpalette()
+
+	try:
+		im1_palette = im1.getpalette()
+	except OSError:
+		return None
+
 	im2_palette = im2.getpalette()
 	im1_bands = im1.getbands()
 	im2_bands = im2.getbands()
@@ -761,7 +762,11 @@ def md_check_basic(im1, im2, verbose=verbose):
 
 def rmsdiff(im1, im2):
 	"""returns rmse (float) between two Image items"""
-	diff = ImageChops.difference(im1, im2)
+	try:
+		diff = ImageChops.difference(im1, im2)
+	except:
+		return None
+
 	h = diff.histogram()
 	sq = (value*((idx%256)**2) for idx, value in enumerate(h))
 	sum_of_squares = sum(sq)
@@ -784,8 +789,7 @@ def make_new_image(im1, show_image=False):
 		im1.save(b.working_file_path)
 		if verbose:
 			line = f"New GIF file made {b.working_file_path}"
-			print (line)
-			summary.textlines.append(line)
+			summary.add_line(line)
 
 		if show_image:
 			im2 = Image.open(b.working_file_path)
@@ -794,9 +798,8 @@ def make_new_image(im1, show_image=False):
 	elif file_format == "JPEG":
 		im1.save(b.working_file_path, quality=100, subsampling="keep", icc_profile=im1.info.get('icc_profile'), exif=im1.info['exif'])
 		if verbose:
-			line = "New JPEG file made {b.working_file_path}"
-			print (line)
-			summary.textlines.append(line)
+			line = f"New JPEG file made {b.working_file_path}"
+			summary.add_line(line)
 
 		if show_image:
 			im2 = Image.open(b.working_file_path)
@@ -815,8 +818,7 @@ def make_new_image(im1, show_image=False):
 		
 		if verbose:
 			line = f"New TIFF file made {b.working_file_path}"
-			print (line)
-			summary.textlines.append(line)
+			summary.add_line(line)
 		if show_image:
 			im2 = Image.open(b.working_file_path)
 			im2.show()
@@ -833,7 +835,11 @@ def set_up_files_package(init_src, dest=False):
 	folder_parts = source_folder.split(os.sep)
 	project_parts = folder_parts[-2:]
 	file_key = a_fname.replace(".", "_")
-	local_root = os.path.join(dst_root,os.sep.join(project_parts)) 
+	local_root = os.path.join(completed_assessments_root, os.sep.join(project_parts)) 
+	# print ("Local root", local_root)
+	# print (dest)
+	# print (init_src)
+	# quit()
 	my_root = a.item_root = b.item_root = local_root+os.sep+file_key
 	working_dest_root = b.image_root = os.path.join(my_root, "NEW")
 	working_src_root =  a.image_root = os.path.join(my_root, "ORIGINAL")
@@ -861,8 +867,15 @@ def set_up_files_package(init_src, dest=False):
 		os.makedirs(working_dest_root)
 	
 	shutil.copy2(init_src, working_src_root)
-	if dest:
+
+	if dest and os.path.exists(dest):
 		shutil.copy2(dest, working_dest_root)
+	else:
+		print ('\nError: File not found:')
+		print (dest)
+		print ("\nFailed to move it to:")
+		print (working_dest_root, "\n")
+		quit()
 
 	a.working_file_path = os.path.join(my_root, "ORIGINAL", a_fname)
 	b.working_file_path = os.path.join(my_root, "NEW" , b_fname)
@@ -875,29 +888,23 @@ def process_image(src, dest=False):
 	a.jhove_report = os.path.join(a.image_root, "jhove.txt")
 	b.jhove_report = os.path.join(b.image_root, "jhove.txt")
 
+	summary.add_line(f"Working on:{a.original_filepath}\n")
+	
 	im2 = Image.open(b.working_file_path)
 	master.rms_check = image_payload_identical(im1, im2)
-	line = f"RMS check: {master.rms_check}"
-	print (line)
-	summary.textlines.append(line)
+	summary.add_line(f"RMS check: {master.rms_check}")
 	
 	master.md_check_basic = metadata_payload_identical(im1, im2)
-	line = f"Tech data check: {master.md_check_basic}" 
-	print (line)
-	summary.textlines.append(line)
+	summary.add_line( f"Tech data check: {master.md_check_basic}" )
 
 	master.md_check_exiftool = exiftool_check()
-	line = f"Exiftool check: {master.md_check_exiftool}"
-	print (line)
-	summary.textlines.append(line)
+	summary.add_line(f"Exiftool check: {master.md_check_exiftool}")
 
 	do_jhove(a.working_file_path, a.jhove_report)
 	do_jhove(b.working_file_path, b.jhove_report)
 	
 	master.md_check_jhove = jhove_check()
-	line = f"JHOVE check: {master.md_check_jhove}"
-	print (line)
-	summary.textlines.append(line)
+	summary.add_line(f"JHOVE check: {master.md_check_jhove}")
 	print ()
 
 	logger()
@@ -905,6 +912,8 @@ def process_image(src, dest=False):
 	b.make_package()
 	do_jhove(a.working_file_path, a.jhove_report)
 	do_jhove(b.working_file_path, b.jhove_report)
+
+	use_exiftool_to_make_htmldump()
 	master.finalise()
 	
 
@@ -924,9 +933,10 @@ def logger(filename="log.csv"):
 	lines.append(["","","",""])
 
 	##### PIL basic 
-	for key in list(a.pil_basic_md.keys()):
-		lines.append(["PIL basic MD", key, a.pil_basic_md[key]==b.pil_basic_md[key],a.pil_basic_md[key], b.pil_basic_md[key]])
-	lines.append(["","","",""])
+	if a.pil_basic_md:
+		for key in list(a.pil_basic_md.keys()):
+			lines.append(["PIL basic MD", key, a.pil_basic_md[key]==b.pil_basic_md[key],a.pil_basic_md[key], b.pil_basic_md[key]])
+		lines.append(["","","",""])
 
 	### format specific md2
 	if a.format_md == None:
@@ -971,25 +981,17 @@ def logger(filename="log.csv"):
 
 def make_list_of_files_from_set_folder():
 	my_files = []
-	my_folder = os.path.join(src_root, set_id)
-	line = f"Getting files from: {my_folder}"
-	print (line)
-	summary.textlines.append(line)
+	line = f"Getting files from: {original_files_root}"
+	summary.add_line(line)
 
-	for folder in [os.path.join(my_folder, x) for x in os.listdir(my_folder)]:
-		for f in [os.path.join(my_folder, folder, x) for x in os.listdir(folder)]:
+	for folder in [os.path.join(original_files_root, x) for x in os.listdir(original_files_root)]:
+		for f in [os.path.join(original_files_root, folder, x) for x in os.listdir(folder)]:
 			my_files.append(f) 
 	
-	line = f"Added {len(my_files)} files"
-	print (line)
-	summary.textlines.append(line)
-	summary.textlines.append("\n")
+	line = f"Added {len(my_files)} files\n"
+	summary.add_line(line)
 	
 	return my_files 
-
-def process_summaries():
-	print (summaries)
-	quit()
 
 master = Comparisions()
 
@@ -997,49 +999,44 @@ flush = True
 verbose = False
 starts_at = 0
 
-src_root = r"C:\collections\xfmt-387"
-dst_root = r"C:\collections\ready_to_upload"
-set_id = "x_fmt_387_4"
-
+original_files_root = r"E:\temp_fmt_353_1\originals"
+cleaned_files_root = r"E:\temp_fmt_353_1\fixed_2"
+completed_assessments_root = r"E:\completed_cleans_testing\temp_fmt_353_1" 
 
 files = make_list_of_files_from_set_folder()
 
 summaries = []
 for i, init_src in enumerate(files):
-	dest_src = init_src.replace(os.path.join(src_root, set_id), os.path.join(src_root, set_id+"_done"))
+	dest_src = init_src.replace(original_files_root, cleaned_files_root)
+
 
 	print ("dest OK:", os.path.exists(dest_src))
 	a = Image_Data_Container()
 	b = Image_Data_Container()
 	if i < starts_at:
 		line = f"Skipping {i} - done"
-		print (line)
-		summary.textlines.append(line)
+		summary.add_line(line)
 	else:
 		process_image(init_src, dest=dest_src)
 		line = f"{i+1} completed\n"
-		print (line)
-		summary.textlines.append(line)
+		summary.add_line(line)
 		summaries.append([a.file_identifer, master.md_check_basic, master.md_check_exiftool, master.md_check_format, master.md_check_jhove, master.rms_check]) 
 
 
 line = "\n#### Summary of checks for set ####\n"
-print (line)
-summary.textlines.append(line)
+summary.add_line(line)
 line = "ID\t\t\t\tMD basic\tExiftool\tFormat\t\tJhove\t\tRMSe"
-print (line)
-summary.textlines.append(line)
+summary.add_line(line)
 
 for item in summaries:
-	line = f"{item[0]}\t\t{item[1]}\t\t{item[2]}\t\t{item[3]}\t\t{item[4]}\t\t{item[5]}"
-	print (line)
 	line = f"{item[0]}\t{item[1]}\t\t{item[2]}\t\t{item[3]}\t\t{item[4]}\t\t{item[5]}"
-	summary.textlines.append(line)
+	summary.add_line(line)
 summary_root, __, __ = a.item_root.rsplit(os.sep, 2)
 summary_file = os.path.join(summary_root,"summary.txt")
+
 with open(summary_file, "w", encoding="utf8") as data:
 	lines = "\n".join(summary.textlines)
-	data.write(lines)
+	for line in lines:
+		data.write(line)
 print ()
-print ()
-print (summary_file)
+print (summary_file, "\n")
