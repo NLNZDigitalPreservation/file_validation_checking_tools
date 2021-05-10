@@ -159,26 +159,56 @@ def exiftool_check(verbose=verbose):
 
 		if verbose:
 			used_keys = []
+
+			a.exiftool_md_cleaned = {k: a.exiftool_md_cleaned [k] for k in sorted(a.exiftool_md_cleaned )}
+			b.exiftool_md_cleaned = {k: b.exiftool_md_cleaned [k] for k in sorted(b.exiftool_md_cleaned )}
+
 			for k, v in a.exiftool_md_cleaned.items():
+
+				#### empty data item normaliser ####
+				if k in a.exiftool_md_cleaned:
+					if a.exiftool_md_cleaned[k] == "":
+						a.exiftool_md_cleaned[k] = "--Empty--"
+					if a.exiftool_md_cleaned[k] == []:
+						a.exiftool_md_cleaned[k] = "--Empty--"
+					if a.exiftool_md_cleaned[k] == "none":
+						a.exiftool_md_cleaned[k] = "--Empty--"
+				else:
+					a.exiftool_md_cleaned[k] = "--Empty--"
+
+
+				if k in b.exiftool_md_cleaned:
+					if b.exiftool_md_cleaned[k] == "":
+						b.exiftool_md_cleaned[k] = "--Empty--"
+					if b.exiftool_md_cleaned[k] == []:
+						b.exiftool_md_cleaned[k] = "--Empty--"
+					if b.exiftool_md_cleaned[k] == "none":
+						b.exiftool_md_cleaned[k] = "--Empty--"
+				else:
+					b.exiftool_md_cleaned[k] = "--Empty--"
+
+
+
+
 				if k not in used_keys:
 					used_keys.append(k)
 				if k not in b.exiftool_md_cleaned:
-					summary.add_line(f"Exiftool check - {k} mismatch: \n\tA: {a.exiftool_md_cleaned[k]} \n\tB: Not transfered")
-					master.deltas.append(["Exiftool check", k, a.exiftool_md_cleaned[k], None])
+					summary.add_line(f"Exiftool - {k} mismatch: \n\tA: {a.exiftool_md_cleaned[k]} \n\tB: --Empty--")
+					master.deltas.append(["Exiftool ", k, a.exiftool_md_cleaned[k], None])
 				elif a.exiftool_md_cleaned[k] != b.exiftool_md_cleaned[k]:
-					summary.add_line( f"Exiftool check - {k} mismatch: \n\tA: {a.exiftool_md_cleaned[k]} \n\tB: {b.exiftool_md_cleaned[k]}")
-					master.deltas.append(["Exiftool check", k, a.exiftool_md_cleaned[k], b.exiftool_md_cleaned[k]])
+					summary.add_line( f"Exiftool - {k} mismatch: \n\tA: {a.exiftool_md_cleaned[k]} \n\tB: {b.exiftool_md_cleaned[k]}")
+					master.deltas.append(["Exiftool ", k, a.exiftool_md_cleaned[k], b.exiftool_md_cleaned[k]])
 
 
 			for k, v in b.exiftool_md_cleaned.items():
 				if k not in used_keys:
 					if k not in a.exiftool_md_cleaned:
-						summary.add_line(f"Exiftool check - {k} mismatch: \n\tA: Data not in original  \n\tB: {b.exiftool_md_cleaned[k]}")
-						master.deltas.append(["Exiftool check", k, None, b.exiftool_md_cleaned[k]])
+						summary.add_line(f"Exiftool - {k} mismatch: \n\tA: --Empty--  \n\tB: {b.exiftool_md_cleaned[k]}")
+						master.deltas.append(["Exiftool ", k, None, b.exiftool_md_cleaned[k]])
 
 					elif a.exiftool_md_cleaned[k] != b.exiftool_md_cleaned[k]:
-						summary.add_line(f"Exiftool check - {k} mismatch: \n\tA: {a.exiftool_md_cleaned[k]} \n\tB: {b.exiftool_md_cleaned[k]}")
-						master.deltas.append(["Exiftool check", k, a.exiftool_md_cleaned[k], b.exiftool_md_cleaned[k]])
+						summary.add_line(f"Exiftool - {k} mismatch: \n\tA: {a.exiftool_md_cleaned[k]} \n\tB: {b.exiftool_md_cleaned[k]}")
+						master.deltas.append(["Exiftool ", k, a.exiftool_md_cleaned[k], b.exiftool_md_cleaned[k]])
 
 
 		return a.exiftool_md_cleaned == b.exiftool_md_cleaned
@@ -193,8 +223,8 @@ def jhove_check():
 
 def use_exiftool_to_make_htmldump():
 
-	a.htmldump_outfile = os.path.join(a.item_root, "ORIGINAL", "exif_htmldump.html")
-	b.htmldump_outfile = os.path.join(a.item_root, "NEW", "exif_htmldump.html")
+	a.htmldump_outfile = os.path.join(a.item_root, "ORIGINAL", "exiftool_htmldump.html")
+	b.htmldump_outfile = os.path.join(a.item_root, "NEW", "exiftool_htmldump.html")
 
 	cmd = f'''exiftool -htmldump "{a.working_file_path}" > "{a.htmldump_outfile}"'''
 	subprocess.call(cmd, shell=True)
@@ -216,8 +246,8 @@ def use_exiftool_to_set_exif():
 	exiftool -ee3 -U -G3:1 -api requestall=3 -api largefilesupport
 	# """
 	# my_temp_json_file = r"e:\\temp_json.json"
-	# cmd = f'''exiftool -u -U  -ee3 -U -G3:1 -api requestall=3 -api largefilesupport -json "{a.working_file_path}" > "{my_temp_json_file}"'''
-	# # cmd = f'''exiftool -u -U -json "{a.working_file_path}" > "{my_temp_json_file}"'''
+	# # cmd = f'''exiftool -u -U  -ee3 -U -G3:1 -api requestall=3 -api largefilesupport -json "{a.working_file_path}" > "{my_temp_json_file}"'''
+	# cmd = f'''exiftool -u -U -json "{a.working_file_path}" > "{my_temp_json_file}"'''
 	# subprocess.call(cmd, shell=True)
 
 	# with open(my_temp_json_file) as json_file:
@@ -231,12 +261,12 @@ def use_exiftool_to_set_exif():
 
 
 	# cmd = f'''exiftool -q -all:all -xmp -json="{my_temp_json_file}" "{b.working_file_path}"'''
-	# subprocess.call(cmd, shell=True)
 
 	# if os.path.exists(my_temp_json_file):
 	# 	os.remove(my_temp_json_file)
 
-	cmd   = f'exiftool.exe -ext TIF -all:all -xmp  -TagsFromFile {a.working_file_path} {b.working_file_path} '
+	cmd   = f'exiftool.exe -TagsFromFile {a.working_file_path} {b.working_file_path}'
+	subprocess.call(cmd, shell=True)
 
 def get_exif_from_source_file():
 	my_temp_json_file = r"e:\\temp_json.json"
@@ -888,7 +918,7 @@ def process_image(src, dest=False):
 	a.jhove_report = os.path.join(a.image_root, "jhove.txt")
 	b.jhove_report = os.path.join(b.image_root, "jhove.txt")
 
-	summary.add_line(f"Working on:{a.original_filepath}\n")
+	summary.add_line(f"Working on: {a.original_filepath}\n")
 	
 	im2 = Image.open(b.working_file_path)
 	master.rms_check = image_payload_identical(im1, im2)
@@ -999,9 +1029,15 @@ flush = True
 verbose = False
 starts_at = 0
 
-original_files_root = r"E:\temp_fmt_353_1\originals"
-cleaned_files_root = r"E:\temp_fmt_353_1\fixed_2"
-completed_assessments_root = r"E:\completed_cleans_testing\temp_fmt_353_1" 
+# original_files_root = r"E:\temp_fmt_353_1\originals"
+# cleaned_files_root = r"E:\temp_fmt_353_1\fixed_3"
+
+
+
+original_files_root = r"E:\temp_fmt_353_3\sequence_order"
+cleaned_files_root = r"E:\temp_fmt_353_3\fixed"
+completed_assessments_root = r"E:\completed_cleans_testing\temp_fmt_353_3" 
+
 
 files = make_list_of_files_from_set_folder()
 
