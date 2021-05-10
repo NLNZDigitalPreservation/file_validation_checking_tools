@@ -10,6 +10,8 @@ def do_jhove(f, dest):
     __, format = f.rsplit(".", 1)
     if format == "tif":
         format = "TIFF"
+    if format == "tiff":
+        format = "TIFF"
     module_lookup = {
                 "AIFF":" -m aiff-hul ",
                 "ASCII":" -m ascii-hul ",
@@ -39,7 +41,9 @@ def get_files_list(root):
 
 def do_summary(folder):
 
-    jhoves = r"\\wlgprdfile12\home$\Wellington\GattusoJ\HomeData\Desktop\clean_up_part_2\temp_jhove_reports"
+    jhoves = r"\\wlgprdfile12\home$\Wellington\GattusoJ\HomeData\Desktop\clean_up_part_2\jhove_reports_fmt_353"
+    if not os.path.exists(jhoves):
+        os.makedirs(jhoves)
 
     files = get_files_list(folder)
 
@@ -49,10 +53,13 @@ def do_summary(folder):
 
         for f in files:
             fpath, fname = f
-            dest = os.path.join(jhoves, fname.replace(".tif", ".txt"))
+            fname, ext = fname.rsplit(".", 1)
+            dest = os.path.join(jhoves, fname+".txt")
             do_jhove(fpath, dest)
 
 
+    aggregator = {}
+    solo_issues = {}
     for i, f in enumerate([x for x in os.listdir(jhoves)]):
 
         f_path = os.path.join(jhoves, f)
@@ -61,6 +68,7 @@ def do_summary(folder):
             errors = {}
             if "Status: Well-Formed and valid" not in text:
                 
+                error_collector = {}
 
                 for line in text.split("\n"):
 
@@ -81,18 +89,24 @@ def do_summary(folder):
 
 
                     if "message" in line.lower():
-                        # print (line)
                         line = line.replace("ErrorMessage: ", "")
                         line = line.strip()
 
                         ### cleans ###
                         if "out of sequence" in line:
                             line = f"Out of sequence:{line}"
+
                         if line == "Validation ended prematurely due to an unhandled exception.":
                             line = "Validation ended prematurely due to an unhandled exception.:"
 
                         if line.startswith("Type mismatch"):
                             line ="Type mismatch:"+line
+
+                        if line.startswith("Premature EOF"):
+                            line = "Premature EOF:"
+
+                        if line ==  "Bad ICCProfile in tag 34675; message Invalid ICC Profile Data":
+                            line = "Bad ICCProfile:Bad ICCProfile in tag 34675"
                         ###############
 
 
@@ -110,6 +124,12 @@ def do_summary(folder):
                             errors[error] = []
                         errors[error].append(data)
 
+                        if error not in aggregator:
+                            aggregator[error] = []
+
+                        if f not in aggregator[error]:
+                            aggregator[error].append(f)
+
                 print (f)
                 if my_file_pid:
                     print (my_file_pid)
@@ -119,14 +139,34 @@ def do_summary(folder):
 
                 for k, my_data in errors.items():
                     print ("\t", k, len(my_data)) 
-
                 print ()
+                
+                if len(errors) == 1:
+                    for error in errors:
+                        if error not in solo_issues:
+                            solo_issues[error] = []
+                        if my_file_pid:
+                             solo_issues[error].append(my_file_pid)
+                        elif my_ie:
+                            solo_issues[error].append(my_ie)
 
-    return i+1
+    return i+1, aggregator, solo_issues
 
 
-folder = r'C:\collections\xfmt-387\x_fmt_387_4_done'   
-flush = True
-count = do_summary(folder)
+folder = r'\\wlgprdfile13\dfs_shares\ndha\dps_export_prod\gattusoj\export\ies\fmt_353'   
+flush = False
+count, aggregator, solo_issues = do_summary(folder)
 
-print ("Files in set:", count)
+print ("\nFiles in set:", count, "\n")
+
+print ("\nAll issues in corpus\n")
+for k, v in aggregator.items():
+    print (k, " - Count:", len(v))
+
+print ()
+print ("\nItems with only one issue\n")
+
+for k, v in solo_issues.items():
+    print (k, " - Count:", len(v))
+    print (v)
+    print ()
