@@ -2,6 +2,16 @@ import os
 import subprocess
 import shutil
 
+def get_done(f):
+    with open (f) as data:
+        done = [x for x in data.read().split("\n") if x != '']
+        print (f"Ignoring {len(done)} files - already processed")
+        # for d in done:
+        #     print (d)
+
+        # quit()
+        return done
+
 
 def do_jhove(f, dest):
     """Calls JHOVE for both images and traps the results
@@ -35,43 +45,43 @@ def do_jhove(f, dest):
 def get_files_list(root):
     files = []
     for folder in os.listdir(root):
-        for f in os.listdir(os.path.join(root, folder)):
-            files.append([os.path.join(root, folder, f), f])
+        if folder in done:
+            pass
+        if folder not in done:
+            for f in os.listdir(os.path.join(root, folder)):
+                files.append([os.path.join(root, folder, f), f])
     return files
 
-def do_summary(folder):
-
-    jhoves = r"\\wlgprdfile12\home$\Wellington\GattusoJ\HomeData\Desktop\clean_up_part_2\jhove_reports_fmt_353"
-    if not os.path.exists(jhoves):
-        os.makedirs(jhoves)
-
+def do_summary(folder):    
+    # if not os.path.exists(jhoves):
+    #     os.makedirs(jhoves)
     files = get_files_list(folder)
+    # if flush:
+    #     shutil.rmtree(jhoves)
+    #     os.makedirs(jhoves)
 
-    if flush:
-        shutil.rmtree(jhoves)
-        os.makedirs(jhoves)
+    #     for f in files:
+    #         fpath, fname = f
+    #         fname, ext = fname.rsplit(".", 1)
+    #         dest = os.path.join(jhoves, fname+".txt")
+    #         do_jhove(fpath, dest)
 
-        for f in files:
-            fpath, fname = f
-            fname, ext = fname.rsplit(".", 1)
-            dest = os.path.join(jhoves, fname+".txt")
-            do_jhove(fpath, dest)
 
 
     aggregator = {}
-    solo_issues = {}
-    for i, f in enumerate([x for x in os.listdir(jhoves)]):
+    solo_issues = {}   
 
+    no_error = [] 
+
+    for i, f in enumerate([x for x in os.listdir(jhoves) if x.replace(".txt", "") not in done]):
         f_path = os.path.join(jhoves, f)
         with open(f_path) as data:
             text = data.read()
             errors = {}
             if "Status: Well-Formed and valid" not in text:
-                
                 error_collector = {}
 
                 for line in text.split("\n"):
-
                     if "RepresentationInformation" in line:
                         line = line.replace("RepresentationInformation: ", "").strip()
                         my_ie = None
@@ -107,6 +117,7 @@ def do_summary(folder):
 
                         if line ==  "Bad ICCProfile in tag 34675; message Invalid ICC Profile Data":
                             line = "Bad ICCProfile:Bad ICCProfile in tag 34675"
+                        
                         ###############
 
 
@@ -130,13 +141,9 @@ def do_summary(folder):
                         if f not in aggregator[error]:
                             aggregator[error].append(f)
 
-                print (f)
-                if my_file_pid:
-                    print (my_file_pid)
-                elif my_ie:
-                    print (my_ie)
+                    
 
-
+                print (my_file_pid)
                 for k, my_data in errors.items():
                     print ("\t", k, len(my_data)) 
                 print ()
@@ -150,18 +157,23 @@ def do_summary(folder):
                         elif my_ie:
                             solo_issues[error].append(my_ie)
 
-    return i+1, aggregator, solo_issues
+    return i+1, aggregator, solo_issues, no_error
 
-
-folder = r'\\wlgprdfile13\dfs_shares\ndha\dps_export_prod\gattusoj\export\ies\fmt_353'   
+done_f = r"E:\tools\file_validation_checking_tools\done_pids\fmt_353.txt"
+folder = r'\\wlgprdfile13\dfs_shares\ndha\dps_export_prod\gattusoj\export\ies\fmt_353'
+jhoves = r"\\wlgprdfile12\home$\Wellington\GattusoJ\HomeData\Desktop\clean_up_part_2\jhove_reports\fmt_353"  
 flush = False
-count, aggregator, solo_issues = do_summary(folder)
+done = get_done(done_f)
+count, aggregator, solo_issues, no_error = do_summary(folder)
+
 
 print ("\nFiles in set:", count, "\n")
 
 print ("\nAll issues in corpus\n")
 for k, v in aggregator.items():
     print (k, " - Count:", len(v))
+    print ([x.replace(".txt", "") for x in v])
+    print ()
 
 print ()
 print ("\nItems with only one issue\n")
@@ -170,3 +182,6 @@ for k, v in solo_issues.items():
     print (k, " - Count:", len(v))
     print (v)
     print ()
+
+print ()
+print (no_error)
