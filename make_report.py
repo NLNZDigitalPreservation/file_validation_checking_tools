@@ -6,7 +6,7 @@ from docx import Document
 from datetime import date
 from pprint import pprint
 
-
+verbose = True
 ### dict lookup stuff ###
 
 def get_lookup():
@@ -53,6 +53,10 @@ def make_dicts(src_folder):
 #########################
 
 def setup_report_data():
+
+	if verbose:			
+		print ("Setting up report data")
+	
 	doc_root = os.path.join(script_root, 'reports')
 	if not os.path.exists(doc_root):
 		print ("Folder being used to for report location does not exist")
@@ -62,7 +66,8 @@ def setup_report_data():
 	doc_name = os.path.join(doc_root, set_id+".doc")
 	
 	if purge_existing_report:
-		os.remove(doc_name)
+		if os.path.exists(doc_name):
+			os.remove(doc_name)
 
 	if os.path.exists(doc_name):
 		print ()
@@ -136,7 +141,28 @@ def add_hyperlink(paragraph, url, text, color="blue", underline=True):
 
     return hyperlink
 
+def get_details_from_csv(f):
+	rows = []
+	with open(f, encoding="utf8") as data:
+		reader =  csv.reader(data,  quoting=csv.QUOTE_ALL, delimiter=',', skipinitialspace=True)
+		for row in reader:
+			rows.append(row)
+
+	return rows[1:]
+
+
+def is_field_flagged(field):
+	flagged_fields = []
+	if field in flagged_fields:
+		return "True"
+	else:
+		return "False"
+
+		
 def make_report(set_id, my_items, boiler_plate, dest_f_name):
+	if verbose:			
+		print ("Starting document")
+
 	document = Document()
 
 	document.add_heading('File Change Request – Structural / Technical Justification')
@@ -183,6 +209,34 @@ def make_report(set_id, my_items, boiler_plate, dest_f_name):
 	document.add_heading("Recommendations", level=2)
 	paragraph = document.add_paragraph('')
 
+	document.add_heading("Summary of validation checks", level=2)
+
+	with open (my_summary_file) as data:
+		text =  data.read()
+		detailed_text, summary_text = text.split("#### Summary of checks for set ####")
+		summary_lines = [x for x in summary_text.split("\n") if x != ""]
+
+	table = document.add_table(rows=len(my_items)+1, cols=6)
+	table.style = 'Medium Shading 1 Accent 1'
+	table.cell(0, 0).text = "File ID"
+	table.cell(0, 1).text = "Basic MD Check"
+	table.cell(0, 2).text = "Exiftool Check"
+	table.cell(0, 3).text = "Format Specific Check"
+	table.cell(0, 4).text = "JHOVE Check"
+	table.cell(0, 5).text = "RMSe Check"
+	for i, item in enumerate(summary_lines[1:], 1):
+		item = [x for x in item.split("\t") if x != ""]
+		if item != []:
+			table.cell(i, 0).text = item[0]
+			table.cell(i, 1).text = item[1]
+			table.cell(i, 2).text = item[2]
+			table.cell(i, 3).text = item[3]
+			table.cell(i, 4).text = item[4]
+			table.cell(i, 5).text = item[5]
+
+
+	paragraph = document.add_paragraph('')
+
 	document.add_heading("Process Notes", level=2)
 	paragraph = document.add_paragraph('')
 	add_hyperlink(paragraph, r"https://dia.cohesion.net.nz/Sites/IAC/SMD/NLSS/SYM/_layouts/15/WopiFrame.aspx?sourcedoc=%7bDFE88BBA-6004-4057-AA30-CFDD8840639A%7d&file=NDHA%20Change%20Request%20Process.docx&action=default", "Update Representation" )
@@ -199,7 +253,6 @@ def make_report(set_id, my_items, boiler_plate, dest_f_name):
 	pseudo_table = document.add_paragraph('FILE PID\tRosetta IE\tAssessment\tReplacement\tActions\n')
 	for i, item in enumerate(my_items, 1):
 		assessment_location_text = item['file_pid']
-		# file_location_text = item["file_location"]
 		file_location_text = "File here"
 		pseudo_table.add_run(f"{item['file_pid']}")
 		pseudo_table.add_run("\t")
@@ -216,9 +269,81 @@ def make_report(set_id, my_items, boiler_plate, dest_f_name):
 	paragraph = document.add_paragraph('Completed Date:')
 	paragraph = document.add_paragraph('')
 
+
+	document.add_page_break()
+
+	document.add_heading("Appendix - All detected changes", level=2)
+	all_fields_changed = []
+
+	if verbose:			
+		print ("Getting Appendix data")
+
+	for pid in os.listdir(src_folder_of_files):
+		my_pid = os.path.join(src_folder_of_files, pid)
+		for file_set in os.listdir(my_pid):
+			my_csv = os.path.join(my_pid, file_set, "differences.csv")
+			if os.path.exists(my_csv):
+				rows = get_details_from_csv(my_csv)
+				for item in rows:
+					all_fields_changed.append(item[1])
+
+	if all_fields_changed != []:
+		all_fields_changed = [x for x in list(set(all_fields_changed)) if x != ""]			
+		all_fields_changed.sort()
+		document.add_heading("Summary of detected changes", level=3)
+		table = document.add_table(rows=len(all_fields_changed)+1, cols=2, )
+		table.style = 'Medium Shading 1 Accent 1'
+		table.cell(0, 0).text = "Field"
+		table.cell(0, 1).text = "Flagged Field"
+
+		for i, field in enumerate(all_fields_changed, 1):
+			table.cell(i, 0).text = field
+			table.cell(i, 1).text = is_field_flagged(field)
+	if verbose:					
+		print ("Adding diffs tables")
+
+	for pid in os.listdir(src_folder_of_files):
+		my_pid = os.path.join(src_folder_of_files, pid)
+		for file_set in os.listdir(my_pid):
+			my_csv = os.path.join(my_pid, file_set, "differences.csv")
+			
+			
+			if os.path.exists(my_csv):
+				if verbose:
+					print ("\t", my_csv)
+				last_char_index = file_set.rfind("_")
+				f_name = file_set[:last_char_index] + "." + file_set[last_char_index+1:]
+				paragraph = document.add_paragraph('')
+				document.add_heading(f"{pid} | {f_name}", level=3)
+				rows = get_details_from_csv(my_csv)
+
+				table = document.add_table(rows=len(rows)+1, cols=5, )
+				table.style = 'Medium Shading 1 Accent 1'
+				table.cell(0, 0).text = "Tool"
+				table.cell(0, 1).text = "Field"
+				table.cell(0, 2).text = "in-file"
+				table.cell(0, 3).text = "Out-file"
+				table.cell(0, 4).text = "Flagged Field"
+				
+				for i, item in enumerate(rows, 1):
+					table.cell(i, 0).text = item[0]
+					table.cell(i, 1).text = item[1]
+					if item[2] == "":
+						table.cell(i, 2).text = "--Empty--"
+					else:
+						table.cell(i, 2).text = item[2]
+					table.cell(i, 3).text = item[3]
+					table.cell(i, 4).text = is_field_flagged(item[1])
+
+					
+	
+	
 	print ()
 	print (f"Finished making: {doc_name}")
 	print ()
+
+
+
 	dest_check_folder = os.path.join(assessment_source_root, set_id).replace("/", os.sep)
 	if not os.path.exists(dest_check_folder) or len(os.listdir(dest_check_folder)) !=  len(my_items):
 		print ("It doesn't look like the file(s) have been moved to their reported location")
@@ -231,15 +356,24 @@ def make_report(set_id, my_items, boiler_plate, dest_f_name):
 ######################################
 
 #### report variables ###
-src_folder_of_files = r"C:\collections\xfmt-387\x_fmt_387_5_done" ## this is where the list of file pids is collected from
-set_id = "x_fmt_387_5" ### must be unique to a set of files related by a common issue 
-puid = "x-fmt/387" 
-format_name = "Exchangeable Image File Format (Uncompressed) 2.2"
-error_text = " Invalid DateTime separator" 
+set_id = "fmt_353_12" ### must be unique to a set of files related by a common issue 
+puid = "fmt/353" 
+
+
+src_folder_of_files = f"E:/completed_cleans/{set_id}" ## this is where the list of file pids is collected from
+format_name = "Tagged Image File Format"
+error_text = "IFD out of sequence" 
 format_ext = ".tif"
 jhove_module = "TIFF-hul, Rel. 1.9.2 (2019-12-10)"
 purge_existing_report = True
-assessment_source_root = r"//wlgprdfile13/dfs_shares/ndha/dps_export_prod/gattusoj/cleanup_phase_2" ### this is where the files will be found
+
+
+
+#### This is used to make the hyperlink. Use the final destination even it the files arn't there yet.  	
+assessment_source_root = r"\\wlgprdfile13\dfs_shares\ndha\dps_export_prod\gattusoj\cleanup_phase_2" ### this is where the files will be found
+
+### summary file data
+my_summary_file = os.path.join(src_folder_of_files.replace(set_id, "summary_files"), set_id+".txt") 
 
 script_root = r"\\wlgprdfile12\home$\Wellington\GattusoJ\homedata\Desktop\clean_up_part_2" ## this is because of how python is run here :( 
 #########################
