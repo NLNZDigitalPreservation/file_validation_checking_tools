@@ -3,6 +3,34 @@ import subprocess
 import shutil
 from distutils.dir_util import copy_tree
 import hashlib
+import pickle
+script_root = r"\\wlgprdfile12\home$\Wellington\GattusoJ\homedata\Desktop\clean_up_part_2"
+
+
+def get_done(f):
+    with open (f) as data:
+        done = [x for x in data.read().split("\n") if x != '']
+        return done
+
+def clean_up_done():
+    with open (done_f, "w") as data:
+        data.write("\n".join(set(done)))
+
+def get_lookup():
+    rosetta_csv = os.path.join(script_root, "rosetta_data.csv")
+    files_pickle = os.path.join(script_root, "rosetta_data.pickle")
+    if os.path.exists(files_pickle):
+        return pickle.load( open( files_pickle, "rb" ) )
+    else:
+        files = {}
+        with open(rosetta_csv, encoding="utf8") as data:
+            reader = csv.reader(data)
+            for r in reader:
+                ie, rep_pid, file_pid, file_name, pres_type, is_valid, is_well_formed, alma, tiaka, size_bytes, ext, puid = r
+                files[file_pid] = (ie, rep_pid, file_pid, file_name, pres_type, is_valid, is_well_formed, alma, tiaka, size_bytes, ext, puid)
+        pickle.dump( files, open( files_pickle, "wb" ) )
+        return files
+look_up = get_lookup()
 
 def md5(fname):
     hash_md5 = hashlib.md5()
@@ -11,45 +39,72 @@ def md5(fname):
             hash_md5.update(chunk)
     return hash_md5.hexdigest()
 
-#### reminder of issue #####
-#  This is the product of the of the jhove analysis tool 'get_jhove_errors_from_set.py"
-#  Using this tool generate potental cohorts and their PIDs  
-#
-# Premature EOF  - Count: 6
-# ['FL28396694', 'FL36355934', 'FL25836881', 'FL8868088', 'FL20401467', 'FL12111455']
-# 
-# \\filestore\gattusoj\export\ies\fmt_353
-# E:\fmt_353
-# 
-############################
+def make_subset(done):
+    files_folder_fixed = os.path.join(temp_set_folder, "fixed")
+    files_folder_original = os.path.join(temp_set_folder, "original")
 
-### where the files are
+    if not os.path.exists(temp_set_folder):
+        os.makedirs(temp_set_folder)
+
+    if not os.path.exists(files_folder_fixed):
+        os.makedirs(files_folder_fixed)
+
+    if not os.path.exists(files_folder_original):
+        os.makedirs(files_folder_original)
+
+
+
+    for pid in pids:
+        for f in os.listdir(os.path.join(root, pid)):
+            my_fixed_item_folder = os.path.join(files_folder_fixed, pid)
+            my_original_item_folder = os.path.join(files_folder_original, pid)
+            
+            my_file  = (os.path.join(root, pid, f))
+            done.append(pid)
+
+            
+
+            if not os.path.exists(my_original_item_folder):
+                os.makedirs(my_original_item_folder)        
+            if not os.path.exists(my_fixed_item_folder):
+                os.makedirs(my_fixed_item_folder)
+
+            shutil.copy2(my_file, my_fixed_item_folder)
+            shutil.copy2(my_file, my_original_item_folder)
+
+
+    for folder in [files_folder_fixed, files_folder_original]:
+
+        for pid in os.listdir(folder):
+            og_filename = look_up[pid][3]
+            my_pid = os.path.join(folder, pid)
+
+            for f in [x for x in os.listdir(my_pid)]:
+                if f.endswith("_original"):
+                    os.remove(os.path.join(folder, my_pid, f))
+
+                elif f != og_filename:
+                    in_name = os.path.join(my_pid, f)
+                    out_name = os.path.join(my_pid, og_filename)
+                    print (f"fixing: {f}")
+                    os.rename(in_name, out_name)
+
+    print (f"Copied {len(pids)} file(s)")
+    print (f"Destination: {temp_set_folder}")
+    return done
+
+##############################
+
+pids = ['FL597049', 'FL599910', 'FL601051', 'FL602228', 'FL972959', 'FL972962']
+
+pids = [x.replace(".txt", "") for x in pids]
+done_f = r"E:\tools\file_validation_checking_tools\done_pids\fmt_353.txt"
 root = r"E:\fmt_353"
+temp_set_folder = r"E:\fmt_353_13"
 
 
-### where the cohort needs to go (final folder is cohort id) 
-temp_set_folder = r"E:\temp_fmt_353_3"
+done = get_done(done_f)
+done = make_subset(done)
+clean_up_done()
 
-
-files_folder = os.path.join(temp_set_folder, "originals")
-
-if not os.path.exists(temp_set_folder):
-    os.makedirs(temp_set_folder)
-if not os.path.exists(files_folder):
-    os.makedirs(files_folder)
-
-#####  starting place is a list of PID ids for a given cohort
-pids = ['FL40326811', 'FL40326814', 'FL40326820', 'FL40326817', 'FL50181908', 'FL992978', 'FL819960', 'FL993061', 'FL993041', 'FL992867', 'FL993076', 'FL993047', 'FL819940', 'FL992975', 'FL819993', 'FL820205', 'FL820237', 'FL790126', 'FL819990', 'FL790071', 'FL820072', 'FL819996', 'FL991646', 'FL820202', 'FL820225', 'FL820222', 'FL820033', 'FL819999', 'FL790123', 'FL819899', 'FL819893', 'FL820014', 'FL820011', 'FL982860', 'FL820008', 'FL953588', 'FL820078', 'FL953597', 'FL992931', 'FL953602', 'FL992937', 'FL819975', 'FL991418', 'FL992925', 'FL2102776', 'FL2102822', 'FL2102828', 'FL2102887', 'FL2102889', 'FL2102834', 'FL2102832', 'FL2102898', 'FL2102896', 'FL2102900', 'FL2102892', 'FL2102905', 'FL2102903', 'FL2102880', 'FL2102836', 'FL2102895', 'FL983402', 'FL790108', 'FL819946', 'FL820021', 'FL819917', 'FL819987', 'FL820270', 'FL820217', 'FL979692', 'FL819896', 'FL790074', 'FL819911', 'FL953594', 'FL979674', 'FL820267', 'FL820264', 'FL953490', 'FL820039', 'FL991511', 'FL979644', 'FL820214', 'FL819934', 'FL819984', 'FL979629']
-
-
-##### pick up all the pids in the cohot and copy them to the cohort folder
-for pid in pids:
-    for f in os.listdir(os.path.join(root, pid)):
-        my_item_folder = os.path.join(files_folder, pid)
-        my_file  = (os.path.join(root, pid, f))
-        if not os.path.exists(my_item_folder):
-            os.makedirs(my_item_folder)
-
-        shutil.copy2(my_file, my_item_folder)
-
-
+print ()
