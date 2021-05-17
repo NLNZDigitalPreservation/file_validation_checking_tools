@@ -8,6 +8,9 @@ def reset_exif(infile, outfile):
     cmd = f'exiftool.exe -TagsFromFile "{infile}" "{outfile}"'
     subprocess.call(cmd, shell=True)
 
+    if os.path.exists(outfile+"_original"):
+        os.remove(outfile+"_original")
+
 def make_sub_folders_copy_file_reset_exif(infile, outroot):
     if not os.path.exists(outroot):
         os.makedirs(outroot)
@@ -60,13 +63,19 @@ def  original_exif_to_new_copy_of_a_file_by_folder(in_root, out_root):
             print ()
 
 
+set_id = "fmt_353_13"
 
+
+root = "e:/"
+root = os.path.join(root, set_id).replace("/", os.sep)
 ##### Example usage
 
-# #### add original exif to existing copy of a file by folder:
-# in_root = r"c:\original_files"
-# out_root = r"c:\copies_to_be_fixed"
-# original_exif_to_existing_copy_of_a_file_by_folder(in_root, out_root) 
+
+
+### add original exif to existing copy of a file by folder:
+in_root = os.path.join(root, "original")
+out_root = os.path.join(root, "fixed")
+original_exif_to_existing_copy_of_a_file_by_folder(in_root, out_root) 
 
 
 # #### add original exif to new copy of a file by folder:
@@ -78,6 +87,17 @@ def  original_exif_to_new_copy_of_a_file_by_folder(in_root, out_root):
 # infile = r"c:\original_files\my_tif.tif"
 # outfile =r"c:\new_folder_for_fixed_files\my_tif.tif"
 # reset_exif(infile, outfile)
+
+
+# infile = r"E:\completed_cleans\testing\a.tif"
+# outfile = r"E:\completed_cleans\testing\b.tif"
+# reset_exif(infile, outfile)
+
+ ####### single file without existing copy
+# infile = r"c:\original_files\my_tif.tif"
+# outfile =r"c:\new_folder_for_fixed_files\my_tif.tif"
+# reset_exif(infile, outfile)
+
 
 
 # make_sub_folders_copy_file_reset_exif(infile, outroot)
